@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react'
 import { Canvas, type ThreeEvent } from '@react-three/fiber'
 import { Grid, OrbitControls } from '@react-three/drei'
 import { DoubleSide, Mesh } from 'three'
@@ -20,6 +20,12 @@ import { deserialize, serialize } from './persist'
 const noRaycast = () => null
 const defaultRaycast = Mesh.prototype.raycast
 
+// Tap-hold hapus (sentuh): ambang tahan, toleransi geser, dan mulai
+// tampilnya indikator sebagai fraksi ambang
+const HOLD_MS = 500
+const HOLD_MOVE_TOLERANCE_PX = 8
+const HOLD_INDICATOR_START = 0.3
+
 function Cube({ id }: { id: string }) {
   const addCube = useCageStore((s) => s.addCube)
   const removeCube = useCageStore((s) => s.removeCube)
@@ -28,8 +34,72 @@ function Cube({ id }: { id: string }) {
   // bukan dihitung balik dari posisi dunia mesh.
   const [x, y, z] = parseCubeKey(id)
 
+  // Progres tahan 0..1; pembersihan timer/listener dipegang lewat ref
+  // supaya bisa dibatalkan dari mana pun (lepas, geser, unmount)
+  const [holdProgress, setHoldProgress] = useState(0)
+  const holdCleanup = useRef<(() => void) | null>(null)
+  const suppressClick = useRef(false)
+
+  const cancelHold = () => {
+    holdCleanup.current?.()
+    holdCleanup.current = null
+    setHoldProgress(0)
+  }
+
+  // Kubus bisa unmount saat masih menahan (hapus berhasil) — bereskan
+  useEffect(() => () => holdCleanup.current?.(), [])
+
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (mode !== 'bangun' || e.nativeEvent.pointerType !== 'touch') return
+    suppressClick.current = false
+    cancelHold()
+
+    const startX = e.nativeEvent.clientX
+    const startY = e.nativeEvent.clientY
+    const startTime = performance.now()
+
+    // SATU sumber waktu untuk visual DAN penghapusan: loop yang sama yang
+    // menggambar progres juga memicu removeCube saat ambang penuh. Jangan
+    // pisah ke setTimeout — pembatalan yang mendarat di sela keduanya
+    // (mis. pointercancel dari long-press browser) bikin visual jalan
+    // penuh tapi hapus tak pernah tereksekusi.
+    let raf = requestAnimationFrame(function tick() {
+      const progress = Math.min((performance.now() - startTime) / HOLD_MS, 1)
+      setHoldProgress(progress)
+      if (progress >= 1) {
+        // Hold penuh: hapus, dan telan click yang menyusul saat jari lepas
+        suppressClick.current = true
+        cancelHold()
+        removeCube(id)
+        return
+      }
+      raf = requestAnimationFrame(tick)
+    })
+    const onMove = (ev: PointerEvent) => {
+      // Geser melebihi toleransi = niatnya orbit, bukan hapus
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > HOLD_MOVE_TOLERANCE_PX) {
+        cancelHold()
+      }
+    }
+    const onEnd = () => cancelHold()
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
+    holdCleanup.current = () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
+    }
+  }
+
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
+    // Click susulan setelah hold-hapus: jangan ikut menambah kubus
+    if (suppressClick.current) {
+      suppressClick.current = false
+      return
+    }
     if (e.shiftKey) {
       removeCube(id)
       return
@@ -41,17 +111,35 @@ function Cube({ id }: { id: string }) {
     addCube(cubeKey(x + nx, y + ny, z + nz))
   }
 
+  const indicatorOpacity =
+    holdProgress > HOLD_INDICATOR_START
+      ? 0.15 + 0.45 * ((holdProgress - HOLD_INDICATOR_START) / (1 - HOLD_INDICATOR_START))
+      : 0
+
   return (
-    <mesh
-      position={cubeToWorld(x, y, z)}
-      onClick={handleClick}
-      raycast={mode === 'bangun' ? defaultRaycast : noRaycast}
-    >
-      <boxGeometry args={[1, 1, 1]} />
-      {/* Tak terlihat tapi tetap raycastable — jangan visible=false,
-          itu mematikan raycast dan merusak tambah/hapus kubus */}
-      <meshBasicMaterial colorWrite={false} depthWrite={false} />
-    </mesh>
+    <group position={cubeToWorld(x, y, z)}>
+      <mesh
+        onClick={handleClick}
+        onPointerDown={handlePointerDown}
+        raycast={mode === 'bangun' ? defaultRaycast : noRaycast}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        {/* Tak terlihat tapi tetap raycastable — jangan visible=false,
+            itu mematikan raycast dan merusak tambah/hapus kubus */}
+        <meshBasicMaterial colorWrite={false} depthWrite={false} />
+      </mesh>
+      {holdProgress > 0 && (
+        <mesh raycast={noRaycast} scale={1.03}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial
+            color="#ff5544"
+            transparent
+            opacity={indicatorOpacity}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+    </group>
   )
 }
 
@@ -354,7 +442,13 @@ export default function App() {
   const panels = useMemo(() => getWallSlots({ cubes, panelTypes }), [cubes, panelTypes])
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div
+      style={{ position: 'relative', width: '100%', height: '100%' }}
+      // Long-press sentuh memicu contextmenu browser (lalu pointercancel
+      // di Android) yang membatalkan tap-hold tepat di ambang — cegah.
+      // Bonus: right-drag pan desktop tak lagi memunculkan menu klik kanan.
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <Canvas camera={{ position: [4, 4, 6], fov: 50 }}>
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 10, 7]} intensity={1.2} />
