@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npx tsc -b; npx oxlint)",
+      "PowerShell($p = Start-Process npx -ArgumentList 'vite','--port','5199' -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 6; try { $r = Invoke-WebRequest http://localhost:5199 -UseBasicParsing; $r.StatusCode; $r.Content.Substring\\(0, 300\\) } finally { Stop-Process -Id $p.Id -Force -Confirm:$false })",
+      "Bash(npx tsc *)",
+      "Bash(npx oxlint *)",
+      "Bash(node store-test.mjs)",
+      "Bash(sed 's|../../../../../../projects/kandang-builder/src/store|./src/store|' \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/store-test.ts\")",
+      "Bash(npx esbuild *)",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/store-test.mjs\")",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/panels-test.mjs\")",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/mode-test.mjs\")",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/orphan-test.mjs\")",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/persist-test.mjs\")",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/walls-test.mjs\")",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/dedupe-test.mjs\")",
+      "Bash(node \"C:/Users/ASUS/AppData/Local/Temp/claude/C--Users-ASUS-projects-kandang-builder/a4630ded-51db-469d-ac59-3aadd069c2c5/scratchpad/bom-test.mjs\")"
+    ]
+  }
+}
