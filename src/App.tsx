@@ -356,6 +356,21 @@ function Overlay() {
   )
 }
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mql = window.matchMedia(query)
+    const onChange = () => setMatches(mql.matches)
+    mql.addEventListener('change', onChange)
+    setMatches(mql.matches)
+    return () => mql.removeEventListener('change', onChange)
+  }, [query])
+  return matches
+}
+
+// Layar sempit ATAU perangkat sentuh → BOM pindah ke bawah
+const COMPACT_QUERY = '(max-width: 640px), (pointer: coarse)'
+
 const BOM_ROWS: { tipe: BomType; label: string }[] = [
   { tipe: 'jeruji', label: 'Jeruji' },
   { tipe: 'pintu', label: 'Pintu' },
@@ -367,6 +382,8 @@ const rp = (n: number) => 'Rp ' + n.toLocaleString('id-ID')
 function Bom({ panels }: { panels: WallSlot[] }) {
   const counts = useMemo(() => tallyWallSlots(panels), [panels])
   const [prices, setPrices] = useState<Record<BomType, number>>({ jeruji: 0, pintu: 0, tutup: 0 })
+  const compact = useMediaQuery(COMPACT_QUERY)
+  const [open, setOpen] = useState(false)
   const total = BOM_ROWS.reduce((sum, r) => sum + counts[r.tipe] * prices[r.tipe], 0)
 
   const setPrice = (tipe: BomType) => (e: ChangeEvent<HTMLInputElement>) => {
@@ -374,23 +391,9 @@ function Bom({ panels }: { panels: WallSlot[] }) {
     setPrices((p) => ({ ...p, [tipe]: value }))
   }
 
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        width: 300,
-        padding: '12px 14px',
-        background: '#22262bee',
-        border: '1px solid #3a3f45',
-        borderRadius: 8,
-        color: '#cdd3d9',
-        fontSize: 14,
-        userSelect: 'none',
-      }}
-    >
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>Bill of Materials</div>
+  // Rincian yang sama untuk kedua layout — hitungan/harga tidak beda jalur
+  const detail = (
+    <>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 34px 100px 1fr', gap: '6px 8px', alignItems: 'center' }}>
         {BOM_ROWS.map(({ tipe, label }) => (
           <div key={tipe} style={{ display: 'contents' }}>
@@ -432,6 +435,72 @@ function Bom({ panels }: { panels: WallSlot[] }) {
         <span>Total</span>
         <span>{rp(total)}</span>
       </div>
+    </>
+  )
+
+  if (!compact) {
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          width: 300,
+          padding: '12px 14px',
+          background: '#22262bee',
+          border: '1px solid #3a3f45',
+          borderRadius: 8,
+          color: '#cdd3d9',
+          fontSize: 14,
+          userSelect: 'none',
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Bill of Materials</div>
+        {detail}
+      </div>
+    )
+  }
+
+  // Layar sempit/sentuh: panel bawah buka-tutup. Saat collapsed cuma bar
+  // ringkas satu baris — kanvas dapat tinggi maksimal, tombol mode di
+  // kiri-atas tidak tertutup.
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: '#22262bf5',
+        borderTop: '1px solid #3a3f45',
+        color: '#cdd3d9',
+        fontSize: 14,
+        userSelect: 'none',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '10px 14px',
+          background: 'none',
+          border: 'none',
+          color: 'inherit',
+          font: 'inherit',
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        <span>BOM {open ? '▾' : '▴'}</span>
+        <span>{rp(total)}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 14px 12px', maxHeight: '45vh', overflowY: 'auto' }}>{detail}</div>
+      )}
     </div>
   )
 }
